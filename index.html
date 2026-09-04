@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>仰角算定盤</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg:#0e1114;
+    --panel-sunken:#0b0d10;
+    --panel-raised:#1c232b;
+    --line:#333d48;
+    --line-soft:#242c35;
+    --text:#e7edef;
+    --text-dim:#8b96a3;
+    --text-faint:#57626e;
+    --accent:#ffb347;
+    --accent-strong:#ffe0a3;
+    --accent-dim:#5c451f;
+    --accent-hit:#8a5b12;
+    --focus:#7fd4ff;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'JetBrains Mono', 'Consolas', monospace;
+    height:100vh;
+    height:100dvh;
+    overflow:hidden;
+    display:flex;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  .app{
+    flex:1;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    padding:6px;
+    gap:6px;
+  }
+
+  .screen{
+    flex:1;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .screen[hidden]{ display:none; }
+
+  /* ---------- shared grid: identical column template & position on every screen ---------- */
+  .toolbar-slot{
+    flex:0 0 auto;
+  }
+  .grid-wrap{
+    flex:1;
+    min-height:0;
+    border:1px solid var(--line);
+    border-radius:4px;
+    overflow-x:hidden;
+    overflow-y:auto;
+    scrollbar-gutter:stable;
+    background:var(--panel-sunken);
+  }
+  .grid-table{
+    display:grid;
+    grid-template-columns: minmax(44px,60px) repeat(6, 1fr);
+    width:100%;
+    height:100%;
+  }
+  /* main (0-60, opens on 30-60) and detail (0.1-degree) both scroll naturally */
+  .grid-table.scrollable{
+    height:auto;
+    min-height:100%;
+    grid-auto-rows:clamp(22px,3.4vh,32px);
+  }
+  .grid-table.sticky-head th.corner,
+  .grid-table.sticky-head th.col-head{
+    position:sticky;
+    top:0;
+    z-index:2;
+  }
+  /* the 0.01-degree fine grid instead fills the screen exactly, no scroll;
+     the header row height still matches the scrollable tables' clamp so it
+     lines up pixel-for-pixel across all three screens */
+  .grid-table.rows-21{ grid-template-rows: clamp(22px,3.4vh,32px) repeat(21, 1fr); }
+  .grid-table thead,
+  .grid-table tbody,
+  .grid-table tr{ display:contents; }
+
+  .grid-table th, .grid-table td{
+    border-bottom:1px solid var(--line-soft);
+    border-right:1px solid var(--line-soft);
+    min-width:0;
+    min-height:0;
+  }
+  .grid-table th.corner{
+    background:var(--panel-raised);
+    color:var(--text-faint);
+    font-family:'Oswald', sans-serif;
+    font-size:clamp(8px,1.3vh,10.5px);
+    letter-spacing:0.02em;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    line-height:1.15;
+    padding:2px;
+  }
+  .grid-table th.col-head{
+    background:var(--panel-raised);
+    color:var(--text-dim);
+    font-family:'Oswald', sans-serif;
+    font-weight:600;
+    font-size:clamp(11px,2vh,15px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .grid-table th.row-head{
+    background:var(--panel-raised);
+    color:var(--text-dim);
+    font-weight:500;
+    font-size:clamp(11px,2vh,15px);
+    font-variant-numeric:tabular-nums;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    padding-right:8px;
+    border-right:1px solid var(--line);
+    cursor:default;
+  }
+  .grid-table td{ padding:0; }
+  .grid-table td button{
+    all:unset;
+    display:flex;
+    width:100%;
+    height:100%;
+    align-items:center;
+    justify-content:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size:clamp(10.5px,1.9vh,14.5px);
+    font-variant-numeric:tabular-nums;
+    color:var(--text);
+    cursor:pointer;
+  }
+  .grid-table td button:hover{
+    background:rgba(255,179,71,0.1);
+    color:var(--accent-strong);
+  }
+  .grid-table td button:focus-visible{
+    outline:2px solid var(--focus);
+    outline-offset:-2px;
+  }
+  .grid-table td button.selected{
+    background:var(--accent-dim);
+    color:var(--accent-strong);
+    font-weight:600;
+  }
+  .grid-table.scrollable td:nth-child(7n+3) button:not(.selected),
+  .grid-table.scrollable td:nth-child(7n+5) button:not(.selected){
+    background:rgba(255,255,255,0.014);
+  }
+
+  /* ---------- shared: plain-text cells used by the detail (0.1) and fine (0.01) grids ---------- */
+  .grid-table.plain-cells td{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size:clamp(10.5px,1.9vh,14.5px);
+    font-variant-numeric:tabular-nums;
+    color:var(--text);
+    cursor:pointer;
+  }
+  .grid-table.plain-cells tbody tr:nth-child(even) td{ background:rgba(255,255,255,0.014); }
+  .grid-table.plain-cells tbody tr:hover td{ background:rgba(255,179,71,0.08); }
+
+  /* whole-step rows get a marked tick color, like a dial's major graduations */
+  .grid-table.plain-cells tbody tr.int-row th.row-head{ color:var(--accent); font-weight:700; }
+  .grid-table.plain-cells tbody tr.int-row td{ background:rgba(255,179,71,0.07); }
+
+  .grid-table.plain-cells tbody tr.hit th.row-head{ background:var(--accent-hit); color:var(--accent-strong); }
+  .grid-table.plain-cells tbody tr.hit td{ background:var(--accent-hit); color:var(--accent-strong); font-weight:700; }
+  .grid-table.plain-cells tbody tr.flash th, .grid-table.plain-cells tbody tr.flash td{ animation:flash 0.5s ease-out; }
+  @keyframes flash{
+    0%{ background:var(--accent); }
+    100%{ background:var(--accent-hit); }
+  }
+
+  /* tapped column stays lit; the other charge columns dim to grey, mirroring the row highlight */
+  .grid-table.plain-cells th.col-head.col-dim{ color:var(--text-faint); }
+  .grid-table.plain-cells td.col-dim{ color:var(--text-faint); }
+  .grid-table.plain-cells tbody tr.hit td.col-dim{ color:var(--text-faint); }
+
+  /* ---------- toolbar (back button + column tabs) ---------- */
+  .toolbar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:nowrap;
+    padding-right:14px;
+  }
+  .btn-back{
+    font-family:'Oswald', sans-serif;
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:0.03em;
+    color:var(--text);
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:10px 16px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex:0 0 auto;
+  }
+  .btn-back:hover{ border-color:var(--accent-dim); color:var(--accent-strong); }
+  .btn-back:active{ transform:translateY(1px); }
+  .btn-back:focus-visible{ outline:2px solid var(--focus); }
+
+  .brand-label{
+    margin-left:auto;
+    min-width:0;
+    flex:0 1 auto;
+    font-family:'Oswald', sans-serif;
+    font-size:clamp(15px,2.4vh,20px);
+    font-weight:500;
+    letter-spacing:0.06em;
+    color:var(--text-faint);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- SCREEN 1: 0-60 degree grid, scrollable; opens on the 30-60 window -->
+  <section class="screen" id="screen-main">
+    <!-- an invisible toolbar keeps the grid starting at the same position as screens 2 and 3 -->
+    <div class="toolbar toolbar-slot">
+      <button class="btn-back" style="visibility:hidden" tabindex="-1" aria-hidden="true">◂ 戻る</button>
+      <span class="brand-label">IRON NEST: Heavy Turret Simulator</span>
+    </div>
+    <div class="grid-wrap" id="main-wrap">
+      <table class="grid-table scrollable sticky-head" id="main-table">
+        <thead>
+          <tr>
+            <th class="corner">仰角<br>／装薬</th>
+            <th class="col-head" id="main-head-1">1</th>
+            <th class="col-head" id="main-head-2">2</th>
+            <th class="col-head" id="main-head-3">3</th>
+            <th class="col-head" id="main-head-4">4</th>
+            <th class="col-head" id="main-head-5">5</th>
+            <th class="col-head" id="main-head-6">6</th>
+          </tr>
+        </thead>
+        <tbody id="main-body"></tbody>
+      </table>
+      <div id="main-spacer"></div>
+    </div>
+  </section>
+
+  <!-- SCREEN 2: 0.1-degree detail table (scrollable) -->
+  <section class="screen" id="screen-detail" hidden>
+    <div class="toolbar">
+      <button class="btn-back" id="btn-back">◂ 戻る</button>
+      <span class="brand-label">IRON NEST: Heavy Turret Simulator</span>
+    </div>
+    <div class="grid-wrap" id="detail-wrap">
+      <table class="grid-table scrollable sticky-head plain-cells" id="detail-table">
+        <thead>
+          <tr>
+            <th class="corner">仰角<br>／装薬</th>
+            <th class="col-head" data-charge="1">1</th>
+            <th class="col-head" data-charge="2">2</th>
+            <th class="col-head" data-charge="3">3</th>
+            <th class="col-head" data-charge="4">4</th>
+            <th class="col-head" data-charge="5">5</th>
+            <th class="col-head" data-charge="6">6</th>
+          </tr>
+        </thead>
+        <tbody id="detail-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SCREEN 3: 0.01-degree fine grid around the tapped 0.1-degree row -->
+  <section class="screen" id="screen-fine" hidden>
+    <div class="toolbar">
+      <button class="btn-back" id="btn-back2">◂ 戻る</button>
+      <span class="brand-label">IRON NEST: Heavy Turret Simulator</span>
+    </div>
+    <div class="grid-wrap">
+      <table class="grid-table rows-21 plain-cells" id="fine-table">
+        <thead>
+          <tr>
+            <th class="corner">仰角<br>／装薬</th>
+            <th class="col-head" data-charge="1">1</th>
+            <th class="col-head" data-charge="2">2</th>
+            <th class="col-head" data-charge="3">3</th>
+            <th class="col-head" data-charge="4">4</th>
+            <th class="col-head" data-charge="5">5</th>
+            <th class="col-head" data-charge="6">6</th>
+          </tr>
+        </thead>
+        <tbody id="fine-body"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var ANGLE_MIN = 0, ANGLE_MAX = 60;
+  var DEFAULT_VIEW_ANGLE = 30;
+  var CHARGES = [1,2,3,4,5,6];
+
+  function dist(charge, angle){ return charge * angle / 12; }
+  function fmt2(n){ return n.toFixed(2); }
+  function fmt1(n){ return n.toFixed(1); }
+
+  var mainTable = document.getElementById('main-table');
+  var mainWrap = document.getElementById('main-wrap');
+  var mainBody = document.getElementById('main-body');
+  var mainSpacer = document.getElementById('main-spacer');
+  var rowsHtml = '';
+  for (var a = ANGLE_MIN; a <= ANGLE_MAX; a++){
+    rowsHtml += '<tr data-angle="' + a + '"><th class="row-head">' + a + '</th>';
+    for (var c = 0; c < CHARGES.length; c++){
+      var charge = CHARGES[c];
+      rowsHtml += '<td><button type="button" data-angle="' + a + '" data-charge="' + charge + '">' + fmt2(dist(charge, a)) + '</button></td>';
+    }
+    rowsHtml += '</tr>';
+  }
+  mainBody.innerHTML = rowsHtml;
+
+  function scrollMainToDefault(){
+    // measure against a zeroed spacer each time so this stays idempotent
+    // no matter how many times or when it runs (font swap, load, etc.)
+    mainSpacer.style.height = '0px';
+    var targetRow = mainBody.querySelector('tr[data-angle="' + DEFAULT_VIEW_ANGLE + '"]');
+    var targetCell = targetRow ? targetRow.querySelector('th') : null;
+    var headerCell = mainTable.querySelector('thead th.corner');
+    if (!targetCell || !headerCell) return;
+    var wrapRect = mainWrap.getBoundingClientRect();
+    var cellRect = targetCell.getBoundingClientRect();
+    var headerRect = headerCell.getBoundingClientRect();
+    // this resolves to the row's true absolute position regardless of
+    // the current scroll offset, so repeated calls converge, not compound
+    var desiredScrollTop = mainWrap.scrollTop + (cellRect.top - wrapRect.top) - headerRect.height;
+    var maxScrollNoSpacer = mainWrap.scrollHeight - mainWrap.clientHeight;
+    // the viewport can be taller than the 30-60 window; grow the spacer
+    // below the last row only by however much extra headroom is needed
+    // so row 30 can reach the very top without the scroll clamping short
+    mainSpacer.style.height = Math.max(0, desiredScrollTop - maxScrollNoSpacer) + 'px';
+    mainWrap.scrollTop = desiredScrollTop;
+  }
+  requestAnimationFrame(function(){
+    scrollMainToDefault();
+    requestAnimationFrame(scrollMainToDefault);
+  });
+  if (document.fonts && document.fonts.ready){
+    document.fonts.ready.then(scrollMainToDefault);
+  }
+  window.addEventListener('load', scrollMainToDefault);
+
+  var screenMain = document.getElementById('screen-main');
+  var screenDetail = document.getElementById('screen-detail');
+  var detailBody = document.getElementById('detail-body');
+  var btnBack = document.getElementById('btn-back');
+  var detailWrap = document.getElementById('detail-wrap');
+
+  var state = { centerAngle: ANGLE_MIN, selectedMainBtn: null, detailCharge: null, fineCharge: null };
+  var detailBuilt = false;
+
+  function buildDetailRows(){
+    var html = '';
+    var steps = Math.round((ANGLE_MAX - ANGLE_MIN) * 10);
+    for (var i = 0; i <= steps; i++){
+      var angle = Math.round((ANGLE_MIN + i * 0.1) * 10) / 10;
+      var isInt = Math.round(angle * 10) % 10 === 0;
+      html += '<tr data-angle="' + angle + '"' + (isInt ? ' class="int-row"' : '') + '><th class="row-head">' + fmt1(angle) + '</th>';
+      for (var c = 0; c < CHARGES.length; c++){
+        html += '<td data-charge="' + CHARGES[c] + '">' + fmt2(dist(CHARGES[c], angle)) + '</td>';
+      }
+      html += '</tr>';
+    }
+    detailBody.innerHTML = html;
+    detailBuilt = true;
+  }
+
+  function applyColSelection(screenEl, charge){
+    var cells = screenEl.querySelectorAll('[data-charge]');
+    for (var i = 0; i < cells.length; i++){
+      var isSelected = charge == null || Number(cells[i].dataset.charge) === charge;
+      cells[i].classList.toggle('col-dim', !isSelected);
+    }
+  }
+
+  function setHitRow(angle, opts){
+    opts = opts || {};
+    state.centerAngle = angle;
+    var rows = detailBody.querySelectorAll('tr');
+    var target = null, closestDiff = Infinity;
+    for (var r = 0; r < rows.length; r++){
+      rows[r].classList.remove('hit');
+      var rowAngle = Number(rows[r].dataset.angle);
+      var diff = Math.abs(rowAngle - angle);
+      if (diff < closestDiff){ closestDiff = diff; target = rows[r]; }
+    }
+    if (!target) return;
+    target.classList.add('hit');
+    if (opts.flash){
+      target.classList.add('flash');
+      setTimeout(function(){ target.classList.remove('flash'); }, 550);
+    }
+    if (opts.scroll){
+      requestAnimationFrame(function(){
+        var cell = target.querySelector('th');
+        if (!cell) return;
+        var wrapRect = detailWrap.getBoundingClientRect();
+        var cellRect = cell.getBoundingClientRect();
+        var delta = (cellRect.top - wrapRect.top) - (detailWrap.clientHeight / 2) + (cellRect.height / 2);
+        detailWrap.scrollTop = Math.max(0, detailWrap.scrollTop + delta);
+      });
+    }
+  }
+
+  function openDetail(angle, charge){
+    if (!detailBuilt) buildDetailRows();
+    screenMain.hidden = true;
+    screenDetail.hidden = false;
+    state.detailCharge = charge;
+    applyColSelection(screenDetail, charge);
+    setHitRow(angle, { flash:true, scroll:true });
+  }
+
+  mainBody.addEventListener('click', function(e){
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    if (state.selectedMainBtn) state.selectedMainBtn.classList.remove('selected');
+    btn.classList.add('selected');
+    state.selectedMainBtn = btn;
+    openDetail(Number(btn.dataset.angle), Number(btn.dataset.charge));
+  });
+
+  detailBody.addEventListener('click', function(e){
+    var row = e.target.closest('tr[data-angle]');
+    if (!row) return;
+    var cell = e.target.closest('td[data-charge]');
+    if (cell){
+      state.detailCharge = Number(cell.dataset.charge);
+      applyColSelection(screenDetail, state.detailCharge);
+    }
+    var angle = Number(row.dataset.angle);
+    if (row.classList.contains('hit')){
+      openFine(angle, state.detailCharge);
+    } else {
+      setHitRow(angle, { flash:true, scroll:false });
+    }
+  });
+
+  btnBack.addEventListener('click', function(){
+    screenDetail.hidden = true;
+    screenMain.hidden = false;
+  });
+
+  /* ---------- level 3: 0.01-degree fine grid, window around the tapped 0.1-degree row ---------- */
+  var screenFine = document.getElementById('screen-fine');
+  var fineBody = document.getElementById('fine-body');
+  var fineTable = document.getElementById('fine-table');
+  var btnBack2 = document.getElementById('btn-back2');
+
+  function buildFineRows(center){
+    var startCents = Math.round((center - 0.1) * 100);
+    var html = '';
+    var count = 0;
+    for (var i = 0; i <= 20; i++){
+      var cents = startCents + i;
+      var angle = cents / 100;
+      if (angle < ANGLE_MIN - 1e-9 || angle > ANGLE_MAX + 1e-9) continue;
+      var isTick = ((cents % 10) + 10) % 10 === 0;
+      html += '<tr data-angle="' + angle.toFixed(2) + '"' + (isTick ? ' class="int-row"' : '') + '><th class="row-head">' + angle.toFixed(2) + '</th>';
+      for (var c = 0; c < CHARGES.length; c++){
+        html += '<td data-charge="' + CHARGES[c] + '">' + fmt2(dist(CHARGES[c], angle)) + '</td>';
+      }
+      html += '</tr>';
+      count++;
+    }
+    fineBody.innerHTML = html;
+    fineTable.style.gridTemplateRows = 'auto repeat(' + count + ', 1fr)';
+    applyColSelection(screenFine, state.fineCharge);
+  }
+
+  function setFineHit(angle, opts){
+    opts = opts || {};
+    var rows = fineBody.querySelectorAll('tr');
+    var target = null, closestDiff = Infinity;
+    for (var r = 0; r < rows.length; r++){
+      rows[r].classList.remove('hit');
+      var rowAngle = Number(rows[r].dataset.angle);
+      var diff = Math.abs(rowAngle - angle);
+      if (diff < closestDiff){ closestDiff = diff; target = rows[r]; }
+    }
+    if (!target) return;
+    target.classList.add('hit');
+    if (opts.flash){
+      target.classList.add('flash');
+      setTimeout(function(){ target.classList.remove('flash'); }, 550);
+    }
+  }
+
+  function openFine(angle, charge){
+    state.fineCharge = charge;
+    buildFineRows(angle);
+    screenDetail.hidden = true;
+    screenFine.hidden = false;
+    setFineHit(angle, { flash:true });
+  }
+
+  fineBody.addEventListener('click', function(e){
+    var row = e.target.closest('tr[data-angle]');
+    if (!row) return;
+    var cell = e.target.closest('td[data-charge]');
+    if (cell){
+      state.fineCharge = Number(cell.dataset.charge);
+      applyColSelection(screenFine, state.fineCharge);
+    }
+    setFineHit(Number(row.dataset.angle), { flash:true });
+  });
+
+  btnBack2.addEventListener('click', function(){
+    screenFine.hidden = true;
+    screenDetail.hidden = false;
+  });
+})();
+</script>
+</body>
+</html>
