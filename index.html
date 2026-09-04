@@ -20,6 +20,7 @@
     --accent-strong:#ffe0a3;
     --accent-dim:#5c451f;
     --accent-hit:#8a5b12;
+    --accent-ink:#241804;
     --focus:#7fd4ff;
   }
 
@@ -229,6 +230,89 @@
   .btn-back:active{ transform:translateY(1px); }
   .btn-back:focus-visible{ outline:2px solid var(--focus); }
 
+  /* distance-in, minimum-charge-solution-out: sits in the same slot the back
+     button occupies on screens 2 and 3, so the toolbar height never changes */
+  .solve-form{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex:0 0 auto;
+  }
+  .solve-label{
+    font-family:'Oswald', sans-serif;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:0.03em;
+    color:var(--text-dim);
+    white-space:nowrap;
+  }
+  .solve-input{
+    all:unset;
+    width:52px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:14px;
+    color:var(--text);
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:10px 8px;
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+  .solve-input:focus-visible{ outline:2px solid var(--focus); border-color:var(--focus); }
+  .solve-input.invalid{ animation:flash 0.5s ease-out; }
+  .solve-unit{
+    font-family:'Oswald', sans-serif;
+    font-size:12px;
+    color:var(--text-faint);
+    margin-left:-4px;
+  }
+  .btn-solve{
+    font-family:'Oswald', sans-serif;
+    font-size:16px;
+    font-weight:700;
+    color:var(--accent-ink);
+    background:var(--accent);
+    border:1px solid var(--accent);
+    border-radius:4px;
+    padding:10px 12px;
+    cursor:pointer;
+    line-height:1;
+  }
+  .btn-solve:hover{ background:var(--accent-strong); }
+  .btn-solve:active{ transform:translateY(1px); }
+  .btn-solve:focus-visible{ outline:2px solid var(--focus); }
+
+  .btn-mic{
+    all:unset;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:38px;
+    height:38px;
+    flex:0 0 auto;
+    color:var(--text-dim);
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    border-radius:4px;
+    cursor:pointer;
+  }
+  .btn-mic svg{ width:16px; height:16px; fill:currentColor; }
+  .btn-mic:hover{ border-color:var(--accent-dim); color:var(--accent-strong); }
+  .btn-mic:active{ transform:translateY(1px); }
+  .btn-mic:focus-visible{ outline:2px solid var(--focus); }
+  .btn-mic.listening{
+    color:var(--accent-ink);
+    background:var(--accent);
+    border-color:var(--accent);
+    animation:mic-pulse 1s ease-in-out infinite;
+  }
+  .btn-mic.unsupported{ display:none; }
+  @keyframes mic-pulse{
+    0%,100%{ box-shadow:0 0 0 0 rgba(255,179,71,0.55); }
+    50%{ box-shadow:0 0 0 6px rgba(255,179,71,0); }
+  }
+
   .brand-label{
     margin-left:auto;
     min-width:0;
@@ -249,9 +333,17 @@
 <div class="app">
   <!-- SCREEN 1: 0-60 degree grid, scrollable; opens on the 30-60 window -->
   <section class="screen" id="screen-main">
-    <!-- an invisible toolbar keeps the grid starting at the same position as screens 2 and 3 -->
+    <!-- fills the same slot the back button occupies on screens 2 and 3, so the toolbar height never changes -->
     <div class="toolbar toolbar-slot">
-      <button class="btn-back" style="visibility:hidden" tabindex="-1" aria-hidden="true">◂ 戻る</button>
+      <form class="solve-form" id="solve-form" autocomplete="off">
+        <label class="solve-label" for="solve-distance">距離</label>
+        <input class="solve-input" id="solve-distance" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.0">
+        <span class="solve-unit">km</span>
+        <button class="btn-mic" id="btn-mic" type="button" title="音声で距離を入力" aria-label="音声で距離を入力">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a1 1 0 1 0-2 0 3 3 0 0 1-6 0 1 1 0 1 0-2 0 5 5 0 0 0 4 4.9V18H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.1A5 5 0 0 0 17 11z"/></svg>
+        </button>
+        <button class="btn-solve" type="submit" title="最少装薬の仰角を求める">▸</button>
+      </form>
       <span class="brand-label">IRON NEST: Heavy Turret Simulator</span>
     </div>
     <div class="grid-wrap" id="main-wrap">
@@ -484,7 +576,7 @@
     }
     var angle = Number(row.dataset.angle);
     if (row.classList.contains('hit')){
-      openFine(angle, state.detailCharge);
+      openFine(angle, state.detailCharge, screenDetail);
     } else {
       setHitRow(angle, { flash:true, scroll:false });
     }
@@ -540,10 +632,11 @@
     }
   }
 
-  function openFine(angle, charge){
+  function openFine(angle, charge, fromScreen){
     state.fineCharge = charge;
+    state.fineReturnScreen = fromScreen || screenDetail;
     buildFineRows(angle);
-    screenDetail.hidden = true;
+    state.fineReturnScreen.hidden = true;
     screenFine.hidden = false;
     setFineHit(angle, { flash:true });
   }
@@ -561,8 +654,103 @@
 
   btnBack2.addEventListener('click', function(){
     screenFine.hidden = true;
-    screenDetail.hidden = false;
+    (state.fineReturnScreen || screenDetail).hidden = false;
   });
+
+  /* ---------- distance-in, minimum-charge-out solver (main screen only) ---------- */
+  var solveForm = document.getElementById('solve-form');
+  var solveInput = document.getElementById('solve-distance');
+  var MAX_REACHABLE_KM = ANGLE_MAX * Math.max.apply(null, CHARGES) / 12;
+
+  function solveMinCharge(distanceKm){
+    var best = null;
+    for (var i = 0; i < CHARGES.length; i++){
+      var c = CHARGES[i];
+      var angle = 12 * distanceKm / c;
+      if (angle >= ANGLE_MIN - 1e-9 && angle <= ANGLE_MAX + 1e-9){
+        if (best === null || c < best.charge){ best = { charge: c, angle: angle }; }
+      }
+    }
+    return best;
+  }
+
+  solveForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var distanceKm = parseFloat(solveInput.value);
+    var result = isFinite(distanceKm) && distanceKm > 0 ? solveMinCharge(distanceKm) : null;
+    if (!result){
+      solveInput.setCustomValidity('0〜' + MAX_REACHABLE_KM.toFixed(1) + 'kmの範囲で入力してください');
+      solveInput.reportValidity();
+      solveInput.classList.remove('invalid');
+      requestAnimationFrame(function(){ solveInput.classList.add('invalid'); });
+      setTimeout(function(){ solveInput.classList.remove('invalid'); }, 550);
+      return;
+    }
+    solveInput.setCustomValidity('');
+    openFine(result.angle, result.charge, screenMain);
+  });
+
+  /* ---------- voice input for the distance field ---------- */
+  var btnMic = document.getElementById('btn-mic');
+  var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function flashInvalidInput(){
+    solveInput.classList.remove('invalid');
+    requestAnimationFrame(function(){ solveInput.classList.add('invalid'); });
+    setTimeout(function(){ solveInput.classList.remove('invalid'); }, 550);
+  }
+
+  // full-width digits/period -> half-width, "13点5" -> "13.5", then pull out the number
+  function parseSpokenDistance(text){
+    var normalized = text.replace(/[０-９．]/g, function(ch){
+      return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+    });
+    normalized = normalized.replace(/(\d+)\s*点\s*(\d+)/, '$1.$2');
+    var match = normalized.match(/\d+(?:\.\d+)?/);
+    return match ? parseFloat(match[0]) : null;
+  }
+
+  if (!SpeechRecognitionCtor){
+    btnMic.classList.add('unsupported');
+    btnMic.disabled = true;
+  } else {
+    var recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.addEventListener('start', function(){
+      btnMic.classList.add('listening');
+    });
+    recognition.addEventListener('end', function(){
+      btnMic.classList.remove('listening');
+    });
+    recognition.addEventListener('error', function(){
+      btnMic.classList.remove('listening');
+      flashInvalidInput();
+    });
+    recognition.addEventListener('result', function(e){
+      var transcript = e.results[0][0].transcript;
+      var value = parseSpokenDistance(transcript);
+      if (value != null){
+        solveInput.value = value;
+        solveForm.requestSubmit();
+      } else {
+        solveInput.setCustomValidity('聞き取れませんでした: 「' + transcript + '」');
+        solveInput.reportValidity();
+        flashInvalidInput();
+      }
+    });
+
+    btnMic.addEventListener('click', function(){
+      if (btnMic.classList.contains('listening')){
+        recognition.abort();
+        return;
+      }
+      try { recognition.start(); } catch (err){ /* already running */ }
+    });
+  }
 })();
 </script>
 </body>
