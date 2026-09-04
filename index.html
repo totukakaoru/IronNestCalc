@@ -234,7 +234,7 @@
     min-width:0;
     flex:0 1 auto;
     font-family:'Oswald', sans-serif;
-    font-size:clamp(15px,2.4vh,20px);
+    font-size:clamp(9px, min(2.4vh, 3.4vw), 20px);
     font-weight:500;
     letter-spacing:0.06em;
     color:var(--text-faint);
@@ -347,7 +347,21 @@
   }
   mainBody.innerHTML = rowsHtml;
 
+  var DEFAULT_WINDOW_ROWS = (ANGLE_MAX - DEFAULT_VIEW_ANGLE + 1) + 1; // 31 data rows + header
+
+  function sizeMainRows(){
+    // pick the tallest row height (capped) that still lets the full
+    // 30-60 window fit the actual viewport - critical on short phone
+    // screens where the desktop-tuned clamp() would overflow and force
+    // an unwanted scroll before reaching row 60
+    mainSpacer.style.height = '0px';
+    var rowPx = Math.floor(mainWrap.clientHeight / DEFAULT_WINDOW_ROWS);
+    rowPx = Math.max(16, Math.min(32, rowPx));
+    mainTable.style.gridAutoRows = rowPx + 'px';
+  }
+
   function scrollMainToDefault(){
+    sizeMainRows();
     // measure against a zeroed spacer each time so this stays idempotent
     // no matter how many times or when it runs (font swap, load, etc.)
     mainSpacer.style.height = '0px';
@@ -376,6 +390,9 @@
     document.fonts.ready.then(scrollMainToDefault);
   }
   window.addEventListener('load', scrollMainToDefault);
+  // mobile browsers resize the viewport as the address bar shows/hides;
+  // re-fit whenever that happens so the 30-60 window keeps fitting
+  window.addEventListener('resize', scrollMainToDefault);
 
   var screenMain = document.getElementById('screen-main');
   var screenDetail = document.getElementById('screen-detail');
