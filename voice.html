@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>音声距離検索</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .voice-wrap{
+    flex:1;
+    min-height:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:12px;
+    overflow:auto;
+  }
+  .solve-panel{
+    width:100%;
+    max-width:420px;
+    background:var(--panel-sunken);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:24px 20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:20px;
+  }
+  .solve-panel-title{
+    font-family:'Oswald', sans-serif;
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:0.05em;
+    color:var(--text-dim);
+    text-align:center;
+  }
+  .solve-form-lg{
+    flex-direction:column;
+    justify-content:center;
+    gap:20px;
+  }
+  .btn-mic.btn-mic-lg{
+    width:132px;
+    height:132px;
+    border-radius:50%;
+    border-width:2px;
+    box-shadow:0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .btn-mic.btn-mic-lg svg{ width:56px; height:56px; }
+  .btn-mic.btn-mic-lg.listening{
+    box-shadow:0 8px 24px -8px rgba(0,0,0,0.6), 0 0 0 0 rgba(255,179,71,0.55);
+  }
+  @keyframes mic-pulse-lg{
+    0%,100%{ box-shadow:0 8px 24px -8px rgba(0,0,0,0.6), 0 0 0 0 rgba(255,179,71,0.55); }
+    50%{ box-shadow:0 8px 24px -8px rgba(0,0,0,0.6), 0 0 0 14px rgba(255,179,71,0); }
+  }
+  .btn-mic.btn-mic-lg.listening{ animation:mic-pulse-lg 1.1s ease-in-out infinite; }
+  .solve-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .solve-input-lg{
+    width:96px;
+    font-size:22px;
+    padding:14px 10px;
+  }
+  .solve-hint{
+    font-family:'Oswald', sans-serif;
+    font-size:11px;
+    letter-spacing:0.04em;
+    color:var(--text-faint);
+    text-align:center;
+  }
+  .readout[hidden]{ display:none; }
+  .readout{
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    padding-top:18px;
+    border-top:1px solid var(--line);
+  }
+  .readout-item{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  .readout-label{
+    font-family:'Oswald', sans-serif;
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:0.05em;
+    color:var(--text-dim);
+    width:52px;
+    text-align:right;
+  }
+  .readout-value{
+    font-family:'JetBrains Mono', monospace;
+    font-size:44px;
+    font-weight:700;
+    color:var(--accent-strong);
+    font-variant-numeric:tabular-nums;
+    line-height:1;
+  }
+  .readout-suffix{
+    font-family:'Oswald', sans-serif;
+    font-size:16px;
+    color:var(--text-faint);
+  }
+  .readout-link{
+    font-family:'Oswald', sans-serif;
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:0.03em;
+    color:var(--accent);
+    text-decoration:none;
+    border:1px solid var(--accent-dim);
+    border-radius:4px;
+    padding:9px 16px;
+  }
+  .readout-link:hover{ background:rgba(255,179,71,0.1); }
+  .readout-link:focus-visible{ outline:2px solid var(--focus); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <section class="screen" id="screen-voice">
+    <div class="toolbar">
+      <a class="btn-back" href="index.html">◂ 早見表</a>
+      <span class="brand-label">IRON NEST: Heavy Turret Simulator</span>
+    </div>
+    <div class="voice-wrap">
+      <div class="solve-panel">
+        <div class="solve-panel-title">距離から最少装薬の仰角を算定</div>
+        <form class="solve-form solve-form-lg" id="solve-form" autocomplete="off">
+          <button class="btn-mic btn-mic-lg" id="btn-mic" type="button" title="音声で距離を入力" aria-label="音声で距離を入力">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a1 1 0 1 0-2 0 3 3 0 0 1-6 0 1 1 0 1 0-2 0 5 5 0 0 0 4 4.9V18H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.1A5 5 0 0 0 17 11z"/></svg>
+          </button>
+          <div class="solve-row">
+            <label class="solve-label" for="solve-distance">距離</label>
+            <input class="solve-input solve-input-lg" id="solve-distance" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.0">
+            <span class="solve-unit">km</span>
+            <button class="btn-solve" type="submit" title="最少装薬の仰角を求める">▸</button>
+          </div>
+        </form>
+        <p class="solve-hint">マイクをタップして距離を読み上げるか、数値を直接入力</p>
+        <div class="readout" id="readout" hidden>
+          <div class="readout-item">
+            <span class="readout-label">装薬</span>
+            <span class="readout-value" id="readout-charge">—</span>
+          </div>
+          <div class="readout-item">
+            <span class="readout-label">仰角</span>
+            <span class="readout-value" id="readout-angle">—</span>
+            <span class="readout-suffix">度</span>
+          </div>
+          <a class="readout-link" id="readout-link" href="index.html">早見表で確認 ▸</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var ANGLE_MIN = 0, ANGLE_MAX = 60;
+  var CHARGES = [1,2,3,4,5,6];
+  var MAX_REACHABLE_KM = ANGLE_MAX * Math.max.apply(null, CHARGES) / 12;
+
+  function solveMinCharge(distanceKm){
+    var best = null;
+    for (var i = 0; i < CHARGES.length; i++){
+      var c = CHARGES[i];
+      var angle = 12 * distanceKm / c;
+      if (angle >= ANGLE_MIN - 1e-9 && angle <= ANGLE_MAX + 1e-9){
+        if (best === null || c < best.charge){ best = { charge: c, angle: angle }; }
+      }
+    }
+    return best;
+  }
+
+  var solveForm = document.getElementById('solve-form');
+  var solveInput = document.getElementById('solve-distance');
+  var readout = document.getElementById('readout');
+  var readoutCharge = document.getElementById('readout-charge');
+  var readoutAngle = document.getElementById('readout-angle');
+  var readoutLink = document.getElementById('readout-link');
+
+  function flashInvalidInput(){
+    solveInput.classList.remove('invalid');
+    requestAnimationFrame(function(){ solveInput.classList.add('invalid'); });
+    setTimeout(function(){ solveInput.classList.remove('invalid'); }, 550);
+  }
+
+  solveForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var distanceKm = parseFloat(solveInput.value);
+    var result = isFinite(distanceKm) && distanceKm > 0 ? solveMinCharge(distanceKm) : null;
+    if (!result){
+      solveInput.setCustomValidity('0〜' + MAX_REACHABLE_KM.toFixed(1) + 'kmの範囲で入力してください');
+      solveInput.reportValidity();
+      flashInvalidInput();
+      readout.hidden = true;
+      return;
+    }
+    solveInput.setCustomValidity('');
+    readoutCharge.textContent = result.charge;
+    readoutAngle.textContent = result.angle.toFixed(2);
+    readoutLink.href = 'index.html?angle=' + result.angle.toFixed(2) + '&charge=' + result.charge;
+    readout.hidden = false;
+  });
+
+  /* ---------- voice input for the distance field ---------- */
+  var btnMic = document.getElementById('btn-mic');
+  var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // full-width digits/period -> half-width, "13点5" -> "13.5", then pull out the number
+  function parseSpokenDistance(text){
+    var normalized = text.replace(/[０-９．]/g, function(ch){
+      return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+    });
+    normalized = normalized.replace(/(\d+)\s*点\s*(\d+)/, '$1.$2');
+    var match = normalized.match(/\d+(?:\.\d+)?/);
+    return match ? parseFloat(match[0]) : null;
+  }
+
+  if (!SpeechRecognitionCtor){
+    btnMic.classList.add('unsupported');
+    btnMic.disabled = true;
+  } else {
+    var recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.addEventListener('start', function(){
+      btnMic.classList.add('listening');
+    });
+    recognition.addEventListener('end', function(){
+      btnMic.classList.remove('listening');
+    });
+    recognition.addEventListener('error', function(){
+      btnMic.classList.remove('listening');
+      flashInvalidInput();
+    });
+    recognition.addEventListener('result', function(e){
+      var transcript = e.results[0][0].transcript;
+      var value = parseSpokenDistance(transcript);
+      if (value != null){
+        solveInput.value = value;
+        solveForm.requestSubmit();
+      } else {
+        solveInput.setCustomValidity('聞き取れませんでした: 「' + transcript + '」');
+        solveInput.reportValidity();
+        flashInvalidInput();
+      }
+    });
+
+    btnMic.addEventListener('click', function(){
+      if (btnMic.classList.contains('listening')){
+        recognition.abort();
+        return;
+      }
+      try { recognition.start(); } catch (err){ /* already running */ }
+    });
+  }
+})();
+</script>
+</body>
+</html>
